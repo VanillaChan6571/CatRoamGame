@@ -57,6 +57,7 @@ const LUCK_MULTIPLIERS = {
 let queue = [];
 let inGame = new Set();
 let lastMessageTime = 0;
+let processingActive = false; // Flag to prevent manual processing
 
 // SQLite for database storage
 const sqlite3 = require('sqlite3').verbose();
@@ -283,12 +284,21 @@ function getRandomLuckTag() {
     return null;
 }
 
-// Process the roam queue
+// Process the roam queue - ONLY called by the interval
 function processRoam() {
-    if (queue.length === 0) return;
+    // Don't process if flag is set or queue is empty
+    if (processingActive || queue.length === 0) return;
+
+    // Set processing flag
+    processingActive = true;
 
     const currentTime = Date.now();
-    if (currentTime - lastMessageTime < COOLDOWN_TIME) return;
+
+    // Check cooldown
+    if (currentTime - lastMessageTime < COOLDOWN_TIME) {
+        processingActive = false;
+        return;
+    }
 
     // Process up to 3 users at once
     const batchSize = Math.min(3, queue.length);
@@ -336,6 +346,9 @@ function processRoam() {
 
     // Update last message time
     lastMessageTime = currentTime;
+
+    // Reset processing flag
+    processingActive = false;
 }
 
 // Handle user commands
@@ -347,7 +360,7 @@ function handleCommand(userId, username, command) {
             if (inGame.has(userId)) {
                 // User is already in queue
                 if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-                    client.say(CHANNELS[0], `Whoa! @${username}, you're cat is already roaming! please wait for it to come back!`);
+                    client.say(CHANNELS[0], `Whoa! @${username}, your cat is already roaming! please wait for it to come back!`);
                     lastMessageTime = currentTime;
                 }
             } else {
@@ -359,6 +372,8 @@ function handleCommand(userId, username, command) {
                     client.say(CHANNELS[0], `@${username}'s cat is now in purrsuit~!`);
                     lastMessageTime = currentTime;
                 }
+
+                // DO NOT call processRoam() here - wait for the scheduled interval
             }
             break;
 
@@ -413,7 +428,7 @@ function handleCommand(userId, username, command) {
     }
 }
 
-// Set up interval to process roam queue every 2 minutes
+// Set up interval to process roam queue every 2 minutes (ROAM_TIME)
 setInterval(processRoam, ROAM_TIME);
 
 // Clean up database connection on exit
