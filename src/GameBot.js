@@ -321,7 +321,7 @@ function processRoam() {
         saveCatch(userId, username, item, tag, luckTag, finalValue);
 
         // Create message part
-        message += `@${username} roamed and found ${item} x ${tag}`;
+        message += `@${username}'s cat returned! it found ${item} rarity of ${tag}`;
         if (luckTag) {
             message += ` x ${luckTag}`;
         }
@@ -347,7 +347,7 @@ function handleCommand(userId, username, command) {
             if (inGame.has(userId)) {
                 // User is already in queue
                 if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-                    client.say(CHANNELS[0], `@${username} you are already in the roaming queue!`);
+                    client.say(CHANNELS[0], `Whoa! @${username}, you're cat is already roaming! please wait for it to come back!`);
                     lastMessageTime = currentTime;
                 }
             } else {
@@ -356,7 +356,7 @@ function handleCommand(userId, username, command) {
                 inGame.add(userId);
 
                 if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-                    client.say(CHANNELS[0], `@${username} has entered the roaming queue! Items will be found in 2 minutes.`);
+                    client.say(CHANNELS[0], `@${username}'s cat is now in purrsuit~!`);
                     lastMessageTime = currentTime;
                 }
             }
@@ -367,7 +367,7 @@ function handleCommand(userId, username, command) {
                 // Display top 5 leaderboard from database
                 getLeaderboard((topPlayers) => {
                     if (topPlayers.length === 0) {
-                        client.say(CHANNELS[0], "No one has roamed yet! Be the first by using !roam");
+                        client.say(CHANNELS[0], "Rare Error! @VanillaChanny something has gone wrong.");
                     } else {
                         let message = "Top Roamers: ";
 
@@ -390,7 +390,7 @@ function handleCommand(userId, username, command) {
                 // Get username history for this user
                 getUsernameHistory(userId, (history) => {
                     if (history.length === 0) {
-                        client.say(CHANNELS[0], `@${username} has no recorded username changes.`);
+                        client.say(CHANNELS[0], `@${username} has no recorded username changes when deployed on 04/07/2025`);
                     } else {
                         let message = `@${username} username history: `;
 
