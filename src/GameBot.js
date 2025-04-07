@@ -1,4 +1,19 @@
-// Add a .env file for environment variables
+// Get best catches leaderboard from database
+function getBestCatchesLeaderboard(callback) {
+    db.all(`SELECT user_id, current_username, best_value 
+          FROM players 
+          ORDER BY best_value DESC 
+          LIMIT 5`,
+        (err, rows) => {
+            if (err) {
+                console.error('Error fetching best catches leaderboard:', err);
+                callback([]);
+            } else {
+                callback(rows);
+            }
+        }
+    );
+}// Add a .env file for environment variables
 require('dotenv').config();
 
 // Twitch Chat Game Bot
@@ -193,9 +208,12 @@ function getUsernameHistory(userId, callback) {
 
 // Get leaderboard from database
 function getLeaderboard(callback) {
-    db.all(`SELECT user_id, current_username, best_value 
-          FROM players 
-          ORDER BY best_value DESC 
+    // Calculate total coins for each player by summing all their catch values
+    db.all(`SELECT p.user_id, p.current_username, SUM(c.value) as total_coins
+          FROM players p
+          JOIN catches c ON p.user_id = c.user_id
+          GROUP BY p.user_id, p.current_username
+          ORDER BY total_coins DESC
           LIMIT 5`,
         (err, rows) => {
             if (err) {
@@ -378,13 +396,36 @@ function handleCommand(userId, username, command) {
             break;
 
         case "!roamboards":
+        case "!roamboard": // Allow the command without the 's' as well
             if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
                 // Display top 5 leaderboard from database
                 getLeaderboard((topPlayers) => {
                     if (topPlayers.length === 0) {
                         client.say(CHANNELS[0], "Rare Error! @VanillaChanny something has gone wrong.");
                     } else {
-                        let message = "Top Roamers: ";
+                        let message = "Top Roamers (Total Coins): ";
+
+                        topPlayers.forEach((player, index) => {
+                            message += `#${index + 1} @${player.current_username} (${player.total_coins} VC)${index < topPlayers.length - 1 ? ", " : ""}`;
+                        });
+
+                        client.say(CHANNELS[0], message);
+                    }
+                });
+
+                lastMessageTime = currentTime;
+            }
+            break;
+
+        case "!roamcaughts":
+        case "!roamcaught": // Allow both spellings
+            if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
+                // Display top 5 best catches leaderboard
+                getBestCatchesLeaderboard((topPlayers) => {
+                    if (topPlayers.length === 0) {
+                        client.say(CHANNELS[0], "Rare Error! @VanillaChanny something has gone wrong.");
+                    } else {
+                        let message = "Top Catches (Best Single Catch): ";
 
                         topPlayers.forEach((player, index) => {
                             message += `#${index + 1} @${player.current_username} (${player.best_value} VC)${index < topPlayers.length - 1 ? ", " : ""}`;
