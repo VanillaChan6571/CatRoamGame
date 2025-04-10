@@ -1,6 +1,7 @@
 // Command handler logic
 const { handleRoamCommand, handleLeaderboardCommand, handleBestCatchesCommand, handleNameHistCommand } = require('./userCommands');
 const { handleDebugCommand, isModerator } = require('./modCommands');
+const { handleShopCommand, handleShopDetailCommand, handleBuyCommand, handleInventoryCommand, handleApplyCommand } = require('./shopCommands');
 const { DEBUG } = require('../config/config');
 
 // Handle user commands
@@ -9,7 +10,11 @@ function handleCommand(userId, username, command, tags) {
         console.log(`Handling command: ${command} from user: ${username} (${userId})`);
     }
 
-    switch (command.toLowerCase()) {
+    // Extract the base command and arguments
+    const [baseCommand, ...args] = command.toLowerCase().split(' ');
+    const commandArgs = args.join(' ');
+
+    switch (baseCommand) {
         case "!roam":
             handleRoamCommand(userId, username);
             break;
@@ -32,9 +37,31 @@ function handleCommand(userId, username, command, tags) {
             handleDebugCommand(tags);
             break;
 
+        // Shop commands
+        case "!roamshop":
+            if (commandArgs) {
+                handleShopDetailCommand(userId, username, commandArgs);
+            } else {
+                handleShopCommand(userId, username);
+            }
+            break;
+
+        case "!roambuy":
+            handleBuyCommand(userId, username, commandArgs);
+            break;
+
+        case "!roaminv":
+        case "!roaminventory":
+            handleInventoryCommand(userId, username);
+            break;
+
+        case "!roamapply":
+            handleApplyCommand(userId, username, commandArgs);
+            break;
+
         default:
             if (DEBUG) {
-                console.log(`Unknown command: ${command}`);
+                console.log(`Unknown command: ${baseCommand}`);
             }
             break;
     }

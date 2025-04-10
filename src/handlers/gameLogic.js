@@ -3,6 +3,7 @@ const { ITEMS, ROAM_TIME, COOLDOWN_TIME } = require('../config/constants');
 const { client, CHANNELS } = require('../config/config');
 const { getRandomItem, getRandomTag, getRandomLuckTag, calculateItemValue } = require('../utils/helpers');
 const { saveCatch } = require('../db/gameQueries');
+const { getCatName, getActiveRoamEffects, markEffectsAsUsed } = require('../db/shopQueries');
 
 // Game state
 let queue = [];
@@ -32,42 +33,113 @@ function processRoam() {
 
     let message = "";
 
-    currentBatch.forEach(user => {
-        const userId = user.id;
-        const username = user.name;
+    // Process each user
+    const processBatch = async () => {
+        for (const user of currentBatch) {
+            const userId = user.id;
+            const username = user.name;
 
-        // Choose a random tag (rarity tier)
-        const tag = getRandomTag();
+            try {
+                // Get user's active effects
+                getActiveRoamEffects(userId, async (effects) => {
+                    // Apply rarity boost for tag selection (catnip)
+                    const rarityMultiplier = effects.rarityMultiplier || 1;
 
-        // Choose a random item from that tier
-        const item = getRandomItem(ITEMS[tag]);
+                    // Choose a random tag (rarity tier) with potential boost
+                    const tag = getRandomTag(rarityMultiplier);
 
-        // Get luck tag and calculate final value
-        const luckTag = getRandomLuckTag();
-        const finalValue = calculateItemValue(tag, luckTag);
+                    // Choose a random item from that tier
+                    const item = getRandomItem(ITEMS[tag]);
 
-        // Add user's catch to database
-        saveCatch(userId, username, item, tag, luckTag, finalValue);
+                    // Get luck tag with potential boost (cream)
+                    const luckMultiplier = effects.luckMultiplier || 1;
+                    const luckTag = getRandomLuckTag(luckMultiplier);
 
-        // Create message part
-        message += `@${username}'s cat returned! it found ${item} rarity of ${tag}`;
-        if (luckTag) {
-            message += ` x ${luckTag}`;
+                    // Calculate final value with coin boosters applied
+                    const baseValue = calculateItemValue(tag, luckTag);
+                    const coinMultiplier = effects.coinMultiplier || 1;
+                    const finalValue = Math.floor(baseValue * coinMultiplier);
+
+                    // Mark consumable effects as used
+                    if (effects.effectsUsed && effects.effectsUsed.length > 0) {
+                        markEffectsAsUsed(effects.effectsUsed, () => {});
+                    }
+
+                    // Add user's catch to database
+                    saveCatch(userId, username, item, tag, luckTag, finalValue);
+
+                    // Get cat name if available
+                    getCatName(userId, (catName) => {
+                        // Create message part
+                        let userPart = `@${username}'s`;
+
+                        // Add cat name if available
+                        if (catName && catName.length > 0) {
+                            userPart += ` "${catName}"`;
+                        } else {
+                            userPart += ` cat`;
+                        }
+
+                        message += `${userPart} returned! it found ${item} rarity of ${tag}`;
+
+                        if (luckTag) {
+                            message += ` x ${luckTag}`;
+                        }
+
+                        // Add info about coin booster if active
+                        if (coinMultiplier > 1) {
+                            const baseValueStr = baseValue.toString();
+                            message += ` worth ${finalValue} Vanilla Coins! (Base: ${baseValueStr}) `;
+                        } else {
+                            message += ` worth over ${finalValue} Vanilla Coins! `;
+                        }
+
+                        // Remove user from in-game set
+                        inGame.delete(userId);
+
+                        // If this is the last user in batch, send the message
+                        if (inGame.size === 0) {
+                            // Send the message to Twitch chat
+                            client.say(CHANNELS[0], message);
+
+                            // Update last message time
+                            lastMessageTime = currentTime;
+
+                            // Reset processing flag
+                            processingActive = false;
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error(`Error processing roam for user ${username}:`, err);
+
+                // Add a basic message in case of error
+                message += `@${username}'s cat returned! it found something... `;
+
+                // Remove user from in-game set
+                inGame.delete(userId);
+            }
         }
-        message += ` worth over ${finalValue} Vanilla Coins! `;
+    };
 
-        // Remove user from in-game set
-        inGame.delete(userId);
+    // Handle batch processing
+    processBatch().catch(err => {
+        console.error('Error in batch processing:', err);
+
+        // Send whatever message we have so far
+        if (message) {
+            client.say(CHANNELS[0], message);
+        }
+
+        // Clean up any remaining users
+        currentBatch.forEach(user => inGame.delete(user.id));
+
+        // Update last message time
+        lastMessageTime = currentTime;
+
+        // Reset processing flag
+        processingActive = false;
     });
-
-    // Send the message to Twitch chat
-    client.say(CHANNELS[0], message);
-
-    // Update last message time
-    lastMessageTime = currentTime;
-
-    // Reset processing flag
-    processingActive = false;
 }
 
 // Start the game for a user

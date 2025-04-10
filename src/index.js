@@ -47,7 +47,7 @@ client.connect()
             setTimeout(() => {
                 try {
                     console.log(`Attempting to send test message to channel: ${CHANNELS[0]}`);
-                    client.say(CHANNELS[0], 'Bot initialization complete. Ready to play!');
+                    client.say(CHANNELS[0], 'Bot Online! Looking out for commands now!');
                     console.log('Test message sent successfully');
                 } catch (err) {
                     console.error('Failed to send test message:', err);

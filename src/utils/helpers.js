@@ -12,25 +12,37 @@ function getRandomNumber(min, max) {
 }
 
 // Helper function to get random tag (rarity)
-function getRandomTag() {
+// Now accepts a multiplier to boost rarity odds
+function getRandomTag(rarityMultiplier = 1) {
     const rarities = Object.keys(TAGS);
 
-    const totalWeight = RARITY_WEIGHTS.reduce((sum, weight) => sum + weight, 0);
+    // Apply the rarity multiplier to non-common weights
+    // This effectively increases chance for better rarities
+    const adjustedWeights = RARITY_WEIGHTS.map((weight, index) => {
+        // First weight is COMMON, don't boost that
+        return index === 0 ? weight : weight * rarityMultiplier;
+    });
+
+    const totalWeight = adjustedWeights.reduce((sum, weight) => sum + weight, 0);
     let random = Math.random() * totalWeight;
 
-    for (let i = 0; i < RARITY_WEIGHTS.length; i++) {
-        if (random < RARITY_WEIGHTS[i]) {
+    for (let i = 0; i < adjustedWeights.length; i++) {
+        if (random < adjustedWeights[i]) {
             return rarities[i];
         }
-        random -= RARITY_WEIGHTS[i];
+        random -= adjustedWeights[i];
     }
 
     return "COMMON"; // Fallback
 }
 
 // Helper function to get random luck multiplier
-function getRandomLuckTag() {
-    if (Math.random() < LUCK_TAG_CHANCE) {
+// Now accepts a multiplier to boost luck chance
+function getRandomLuckTag(luckMultiplier = 1) {
+    // Apply the luck multiplier to the base chance
+    const adjustedChance = Math.min(1, LUCK_TAG_CHANCE * luckMultiplier);
+
+    if (Math.random() < adjustedChance) {
         const luckTags = Object.keys(LUCK_MULTIPLIERS);
         return getRandomItem(luckTags);
     }

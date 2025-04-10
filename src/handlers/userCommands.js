@@ -4,6 +4,7 @@ const { COOLDOWN_TIME } = require('../config/constants');
 const { startRoam, isInGame, lastMessageTime, setLastMessageTime } = require('./gameLogic');
 const { getLeaderboard, getBestCatchesLeaderboard } = require('../db/gameQueries');
 const { getUsernameHistory } = require('../db/playerQueries');
+const { getCatName } = require('../db/shopQueries');
 
 // Handle roam command
 function handleRoamCommand(userId, username) {
@@ -12,7 +13,18 @@ function handleRoamCommand(userId, username) {
     if (isInGame(userId)) {
         // User is already in queue
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-            client.say(CHANNELS[0], `Whoa! @${username}, your cat is already roaming! please wait for it to come back!`);
+            getCatName(userId, (catName) => {
+                let message = `Whoa! @${username}`;
+                if (catName && catName.length > 0) {
+                    message += `'s "${catName}"`;
+                } else {
+                    message += ", your cat";
+                }
+                message += " is already roaming! please wait for it to come back!";
+
+                client.say(CHANNELS[0], message);
+            });
+
             setLastMessageTime(currentTime);
         }
     } else {
@@ -20,7 +32,18 @@ function handleRoamCommand(userId, username) {
         startRoam(userId, username);
 
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-            client.say(CHANNELS[0], `@${username}'s cat is now in purrsuit~!`);
+            getCatName(userId, (catName) => {
+                let message = `@${username}'s`;
+                if (catName && catName.length > 0) {
+                    message += ` "${catName}"`;
+                } else {
+                    message += " cat";
+                }
+                message += " is now in purrsuit~!";
+
+                client.say(CHANNELS[0], message);
+            });
+
             setLastMessageTime(currentTime);
         }
     }
