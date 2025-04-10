@@ -1,0 +1,18 @@
+src/
+├── config/
+│   ├── constants.js       # Game constants, item definitions, tags, etc.
+│   └── config.js          # Bot configuration
+├── db/
+│   ├── database.js        # Database initialization and connection
+│   ├── playerQueries.js   # Player-related database operations
+│   └── gameQueries.js     # Game-related database operations (catches, leaderboards)
+├── handlers/
+│   ├── commandHandler.js  # Command handler logic
+│   ├── userCommands.js    # Regular user commands
+│   ├── modCommands.js     # Moderator commands
+│   └── gameLogic.js       # Core game mechanics
+├── utils/
+│   ├── helpers.js         # Utility functions
+│   └── debug.js           # Debug utilities
+├── .env                   # Environment variables
+└── index.js               # Main entry point
