@@ -1,5 +1,6 @@
 // Bot configuration
-require('dotenv').config({ path: '../.env' });
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const tmi = require('tmi.js');
 
 // Twitch Bot Configuration - Load from environment variables
