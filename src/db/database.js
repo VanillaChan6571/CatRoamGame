@@ -37,6 +37,16 @@ function initDatabase() {
             FOREIGN KEY(user_id) REFERENCES players(user_id)
         )`);
 
+        // Create joined channels table for multi-channel support
+        db.run(`CREATE TABLE IF NOT EXISTS joined_channels (
+            channel_name TEXT PRIMARY KEY,
+            broadcaster_id TEXT NOT NULL,
+            joined_at INTEGER NOT NULL,
+            is_main_channel BOOLEAN DEFAULT 0,
+            last_seen_live BOOLEAN DEFAULT 0,
+            last_checked INTEGER
+        )`);
+
         // Create index on username_history for efficient lookups
         db.run(`CREATE INDEX IF NOT EXISTS idx_username_history_user_id ON username_history(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_username_history_username ON username_history(username)`);

@@ -2,61 +2,86 @@
 const { handleRoamCommand, handleLeaderboardCommand, handleBestCatchesCommand, handleNameHistCommand } = require('./userCommands');
 const { handleDebugCommand, isModerator } = require('./modCommands');
 const { handleShopCommand, handleShopDetailCommand, handleBuyCommand, handleInventoryCommand, handleApplyCommand } = require('./shopCommands');
-const { DEBUG } = require('../config/config');
+const { handleJoinCommand, handleLeaveCommand, shouldProcessCommand } = require('./channelCommands');
+const { DEBUG, MAIN_CHANNEL } = require('../config/config');
 
 // Handle user commands
-function handleCommand(userId, username, command, tags) {
+async function handleCommand(userId, username, command, tags, channel) {
     if (DEBUG) {
-        console.log(`Handling command: ${command} from user: ${username} (${userId})`);
+        console.log(`Handling command: ${command} from user: ${username} (${userId}) in channel: ${channel}`);
     }
 
     // Extract the base command and arguments
     const [baseCommand, ...args] = command.toLowerCase().split(' ');
     const commandArgs = args.join(' ');
 
+    // Special handling for join/leave commands regardless of channel status
+    if (baseCommand === "!roamjoin" && channel.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
+        await handleJoinCommand(userId, username, tags);
+        return;
+    }
+
+    if (baseCommand === "!roamleave") {
+        await handleLeaveCommand(userId, username, channel);
+        return;
+    }
+
+    // Check if the channel is live (if not the main channel)
+    if (channel.toLowerCase() !== MAIN_CHANNEL.toLowerCase()) {
+        const shouldProcess = await shouldProcessCommand(channel);
+        if (!shouldProcess) {
+            // Only respond occasionally to avoid spamming
+            if (Math.random() < 0.25) { // 25% chance to respond
+                return `Seems like ${channel} is taking a cat nap... please wait for them to wake up!`;
+            }
+            return;
+        }
+    }
+
+    // Process regular commands
     switch (baseCommand) {
         case "!roam":
-            handleRoamCommand(userId, username);
+            handleRoamCommand(userId, username, channel);
             break;
 
         case "!roamboards":
         case "!roamboard": // Allow the command without the 's' as well
-            handleLeaderboardCommand();
+            handleLeaderboardCommand(channel);
             break;
 
         case "!roamcaughts":
         case "!roamcaught": // Allow both spellings
-            handleBestCatchesCommand();
+            handleBestCatchesCommand(channel);
             break;
 
         case "!namehist":
-            handleNameHistCommand(userId, username);
+            handleNameHistCommand(userId, username, channel);
             break;
 
         case "!debug":
-            handleDebugCommand(tags);
+            handleDebugCommand(tags, channel);
             break;
 
         // Shop commands
         case "!roamshop":
             if (commandArgs) {
-                handleShopDetailCommand(userId, username, commandArgs);
+                handleShopDetailCommand(userId, username, commandArgs, channel);
             } else {
-                handleShopCommand(userId, username);
+                handleShopCommand(userId, username, channel);
             }
             break;
 
         case "!roambuy":
-            handleBuyCommand(userId, username, commandArgs);
+            handleBuyCommand(userId, username, commandArgs, channel);
             break;
 
         case "!roaminv":
         case "!roaminventory":
-            handleInventoryCommand(userId, username);
+            handleInventoryCommand(userId, username, channel);
             break;
 
         case "!roamapply":
-            handleApplyCommand(userId, username, commandArgs);
+            handleApplyCommand(userId, username, commandArgs, channel);
             break;
 
         default:
@@ -72,7 +97,7 @@ function setupCommandListener(client) {
     // Listen for all messages (for debugging)
     if (DEBUG) {
         client.on('message', (channel, tags, message, self) => {
-            console.log(`[CHAT] ${tags['display-name']}: ${message}`);
+            console.log(`[CHAT] ${channel} - ${tags['display-name']}: ${message}`);
         });
     }
 
@@ -90,7 +115,7 @@ function setupCommandListener(client) {
 
         // Handle commands
         if (message.startsWith('!')) {
-            handleCommand(userId, username, message.trim(), tags);
+            handleCommand(userId, username, message.trim(), tags, channel);
         }
     });
 

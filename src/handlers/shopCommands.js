@@ -1,24 +1,24 @@
 // Shop-related commands
-const { client, CHANNELS } = require('../config/config');
+const { client } = require('../config/config');
 const { COOLDOWN_TIME } = require('../config/constants');
 const { getShopItems, getUserCoins, getUserInventory, getUserActiveEffects, buyShopItem, applyItemEffect, getCatName } = require('../db/shopQueries');
 const { isInGame, lastMessageTime, setLastMessageTime } = require('./gameLogic');
 
 // Handle shop command
-function handleShopCommand(userId, username) {
+function handleShopCommand(userId, username, channel) {
     const currentTime = Date.now();
 
     if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
         getShopItems((items) => {
             if (items.length === 0) {
-                client.say(CHANNELS[0], "The shop is currently empty. Try again later!");
+                client.say(channel, "The shop is currently empty. Try again later!");
                 return;
             }
 
             // Get user's coins
             getUserCoins(userId, (coins) => {
                 const message = `@${username}, Welcome to the Vanilla Coin Shop! You have ${coins || 0} VC. View items with !roamshop 1-7 or buy with !roambuy <item_number> you can also view the shop at https://github.com/VanillaChan6571/CatRoamGame/wiki/RoamShopItemsList`;
-                client.say(CHANNELS[0], message);
+                client.say(channel, message);
             });
         });
 
@@ -27,7 +27,7 @@ function handleShopCommand(userId, username) {
 }
 
 // Handle shop detail command
-function handleShopDetailCommand(userId, username, param) {
+function handleShopDetailCommand(userId, username, param, channel) {
     const currentTime = Date.now();
 
     if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
@@ -35,7 +35,7 @@ function handleShopDetailCommand(userId, username, param) {
         const itemNumber = parseInt(param);
 
         if (isNaN(itemNumber) || itemNumber < 1 || itemNumber > 7) {
-            client.say(CHANNELS[0], `@${username}, Please specify a valid item number (1-7)`);
+            client.say(channel, `@${username}, Please specify a valid item number (1-7)`);
             setLastMessageTime(currentTime);
             return;
         }
@@ -43,13 +43,13 @@ function handleShopDetailCommand(userId, username, param) {
         // Get shop items
         getShopItems((items) => {
             if (items.length === 0 || itemNumber > items.length) {
-                client.say(CHANNELS[0], `@${username}, That item doesn't exist in the shop.`);
+                client.say(channel, `@${username}, That item doesn't exist in the shop.`);
                 return;
             }
 
             const item = items[itemNumber - 1];
             const message = `@${username}, ${item.display_name} (${item.price} VC): ${item.description}. Use !roambuy ${itemNumber} to purchase.`;
-            client.say(CHANNELS[0], message);
+            client.say(channel, message);
         });
 
         setLastMessageTime(currentTime);
@@ -57,7 +57,7 @@ function handleShopDetailCommand(userId, username, param) {
 }
 
 // Handle buy command
-function handleBuyCommand(userId, username, param) {
+function handleBuyCommand(userId, username, param, channel) {
     const currentTime = Date.now();
 
     if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
@@ -65,7 +65,7 @@ function handleBuyCommand(userId, username, param) {
         const itemNumber = parseInt(param);
 
         if (isNaN(itemNumber) || itemNumber < 1 || itemNumber > 7) {
-            client.say(CHANNELS[0], `@${username}, Please specify a valid item number (1-7)`);
+            client.say(channel, `@${username}, Please specify a valid item number (1-7)`);
             setLastMessageTime(currentTime);
             return;
         }
@@ -73,7 +73,7 @@ function handleBuyCommand(userId, username, param) {
         // Get shop items
         getShopItems((items) => {
             if (items.length === 0 || itemNumber > items.length) {
-                client.say(CHANNELS[0], `@${username}, That item doesn't exist in the shop.`);
+                client.say(channel, `@${username}, That item doesn't exist in the shop.`);
                 return;
             }
 
@@ -82,9 +82,9 @@ function handleBuyCommand(userId, username, param) {
             // Try to buy the item
             buyShopItem(userId, item.id, (success, message) => {
                 if (success) {
-                    client.say(CHANNELS[0], `@${username}, ${message}! Use !roaminv to view your inventory.`);
+                    client.say(channel, `@${username}, ${message}! Use !roaminv to view your inventory.`);
                 } else {
-                    client.say(CHANNELS[0], `@${username}, ${message}.`);
+                    client.say(channel, `@${username}, ${message}.`);
                 }
             });
         });
@@ -94,14 +94,14 @@ function handleBuyCommand(userId, username, param) {
 }
 
 // Handle inventory command
-function handleInventoryCommand(userId, username) {
+function handleInventoryCommand(userId, username, channel) {
     const currentTime = Date.now();
 
     if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
         // Get user's inventory
         getUserInventory(userId, (items) => {
             if (items.length === 0) {
-                client.say(CHANNELS[0], `@${username}, Your inventory is empty. Use !roamshop to visit the shop.`);
+                client.say(channel, `@${username}, Your inventory is empty. Use !roamshop to visit the shop.`);
                 setLastMessageTime(currentTime);
                 return;
             }
@@ -113,7 +113,7 @@ function handleInventoryCommand(userId, username) {
             });
             message += ". Use !roamapply <type> to use an item.";
 
-            client.say(CHANNELS[0], message);
+            client.say(channel, message);
         });
 
         // Also check active effects
@@ -143,13 +143,13 @@ function handleInventoryCommand(userId, username) {
                             activeMessage += `. Your cat name: "${catName}"`;
                         }
 
-                        client.say(CHANNELS[0], activeMessage);
+                        client.say(channel, activeMessage);
                     });
                 } else {
                     // Just check for cat name if no active effects
                     getCatName(userId, (catName) => {
                         if (catName) {
-                            client.say(CHANNELS[0], `@${username}, Your cat is named "${catName}".`);
+                            client.say(channel, `@${username}, Your cat is named "${catName}".`);
                         }
                     });
                 }
@@ -161,13 +161,13 @@ function handleInventoryCommand(userId, username) {
 }
 
 // Handle apply command
-function handleApplyCommand(userId, username, commandArgs) {
+function handleApplyCommand(userId, username, commandArgs, channel) {
     const currentTime = Date.now();
 
     // Need at least one parameter (the item type)
     if (!commandArgs || !commandArgs.trim()) {
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-            client.say(CHANNELS[0], `@${username}, Please specify which item to use (e.g., !roamapply catnip)`);
+            client.say(channel, `@${username}, Please specify which item to use (e.g., !roamapply catnip)`);
             setLastMessageTime(currentTime);
         }
         return;
@@ -184,7 +184,7 @@ function handleApplyCommand(userId, username, commandArgs) {
     // Apply the item effect
     applyItemEffect(userId, command, param, userInRoam, (success, message) => {
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
-            client.say(CHANNELS[0], `@${username}, ${message}`);
+            client.say(channel, `@${username}, ${message}`);
             setLastMessageTime(currentTime);
         }
     });

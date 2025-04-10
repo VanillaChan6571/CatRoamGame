@@ -1,9 +1,10 @@
 // Core game mechanics
 const { ITEMS, ROAM_TIME, COOLDOWN_TIME } = require('../config/constants');
-const { client, CHANNELS } = require('../config/config');
+const { client, MAIN_CHANNEL } = require('../config/config');
 const { getRandomItem, getRandomTag, getRandomLuckTag, calculateItemValue } = require('../utils/helpers');
 const { saveCatch } = require('../db/gameQueries');
 const { getCatName, getActiveRoamEffects, markEffectsAsUsed } = require('../db/shopQueries');
+const { getJoinedChannels } = require('../db/channelQueries');
 
 // Game state
 let queue = [];
@@ -99,8 +100,8 @@ function processRoam() {
 
                         // If this is the last user in batch, send the message
                         if (inGame.size === 0) {
-                            // Send the message to Twitch chat
-                            client.say(CHANNELS[0], message);
+                            // Send the message to all connected channels
+                            sendToAllChannels(message);
 
                             // Update last message time
                             lastMessageTime = currentTime;
@@ -128,7 +129,7 @@ function processRoam() {
 
         // Send whatever message we have so far
         if (message) {
-            client.say(CHANNELS[0], message);
+            sendToAllChannels(message);
         }
 
         // Clean up any remaining users
@@ -140,6 +141,23 @@ function processRoam() {
         // Reset processing flag
         processingActive = false;
     });
+}
+
+// Send message to all connected channels
+async function sendToAllChannels(message) {
+    try {
+        // Get all connected channels from database
+        const channels = await getJoinedChannels();
+
+        // Send message to each channel
+        for (const channel of channels) {
+            client.say(channel.channel_name, message);
+        }
+    } catch (error) {
+        console.error('Error sending to all channels:', error);
+        // Fallback to main channel if there's an error
+        client.say(MAIN_CHANNEL, message);
+    }
 }
 
 // Start the game for a user
