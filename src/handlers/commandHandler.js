@@ -9,6 +9,12 @@ const { DEBUG, MAIN_CHANNEL } = require('../config/config');
 async function handleCommand(userId, username, command, tags, channel) {
     if (DEBUG) {
         console.log(`Handling command: ${command} from user: ${username} (${userId}) in channel: ${channel}`);
+        console.log('Main channel is:', MAIN_CHANNEL);
+        console.log('Is this the main channel?', channel.toLowerCase() === MAIN_CHANNEL.toLowerCase());
+
+        if (command.toLowerCase().startsWith('!roamjoin')) {
+            console.log('!roamjoin command detected! Tags:', JSON.stringify(tags));
+        }
     }
 
     // Extract the base command and arguments
@@ -16,8 +22,16 @@ async function handleCommand(userId, username, command, tags, channel) {
     const commandArgs = args.join(' ');
 
     // Special handling for join/leave commands regardless of channel status
-    if (baseCommand === "!roamjoin" && channel.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
-        await handleJoinCommand(userId, username, tags);
+    if (baseCommand === "!roamjoin") {
+        console.log(`Processing !roamjoin from ${username} in channel: ${channel}`);
+
+        // Only allow from main channel (unless in DEBUG mode)
+        if (DEBUG || channel.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
+            await handleJoinCommand(userId, username, tags);
+        } else {
+            client.say(channel, `@${username}, the !roamjoin command can only be used in the main channel: ${MAIN_CHANNEL}`);
+            console.log(`Rejected !roamjoin in non-main channel: ${channel}`);
+        }
         return;
     }
 

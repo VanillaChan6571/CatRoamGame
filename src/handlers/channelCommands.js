@@ -1,5 +1,5 @@
 // Channel management commands
-const { client, MAIN_CHANNEL, joinChannel, leaveChannel } = require('../config/config');
+const { client, MAIN_CHANNEL, joinChannel, leaveChannel, DEBUG } = require('../config/config');
 const { COOLDOWN_TIME } = require('../config/constants');
 const { lastMessageTime, setLastMessageTime } = require('./gameLogic');
 const { addChannel, removeChannel, isChannelJoined, checkChannelLiveStatus, checkModStatus } = require('../db/channelQueries');
@@ -7,9 +7,16 @@ const { isModerator } = require('./modCommands');
 
 // Handle join request command
 async function handleJoinCommand(userId, username, tags) {
-    // Only broadcasters can request the bot to join their channel
-    if (!tags.badges || !tags.badges.broadcaster) {
-        client.say(MAIN_CHANNEL, `@${username}, Only channel broadcasters can request the bot to join their channel.`);
+    console.log(`Join command received from ${username}`);
+    console.log('Tags object:', JSON.stringify(tags));
+
+    // For testing/debug purposes, bypass broadcaster check
+    if (DEBUG) {
+        console.log('DEBUG mode: Allowing join command without broadcaster badge');
+    }
+    // Normal production check - only channel owners can request the bot to join
+    else if (!tags || !tags.badges || !tags.badges.broadcaster) {
+        client.say(MAIN_CHANNEL, `@${username}, the !roamjoin command is for channel owners to add me to their channel. If you own a channel and want to use this command, make sure you're logged in as the broadcaster account.`);
         return;
     }
 
@@ -21,25 +28,28 @@ async function handleJoinCommand(userId, username, tags) {
     try {
         // Check if channel is already joined
         const alreadyJoined = await isChannelJoined(username);
+        console.log(`Channel ${username} already joined? ${alreadyJoined}`);
+
         if (alreadyJoined) {
             client.say(MAIN_CHANNEL, `@${username}, I'm already set up to join your channel!`);
             setLastMessageTime(currentTime);
             return;
         }
 
-        // Check if the bot is modded in the broadcaster's channel
-        // Note: We would need Twitch API integration for a proper check
-        // For now, just assume it's not modded and inform the user
-        client.say(MAIN_CHANNEL, `@${username}, I'll join your channel! Make sure to mod me (/mod ${client.getUsername()}) for the best experience. Use !roamleave in this channel if you want me to leave later.`);
+        // Add the bot to the user's channel
+        client.say(MAIN_CHANNEL, `@${username}, I'll join your channel! Make sure to mod me (/mod ${client.getUsername()}) for the best experience. Use !roamleave in your channel if you want me to leave later.`);
 
         // Add channel to database and join
+        console.log(`Adding channel ${username} to database`);
         await addChannel(username, userId);
+        console.log(`Joining channel ${username}`);
         await joinChannel(username);
 
         // Send welcome message to the new channel
         const isLive = await checkChannelLiveStatus(username);
+
         if (isLive) {
-            client.say(username, `Hello @${username}! I'm now ready to accept commands in your channel. Your viewers can use !roam to start playing! If you want me to leave, type !roamleave on https://twitch.tv/${MAIN_CHANNEL}`);
+            client.say(username, `Hello @${username}! I'm now ready to accept commands in your channel. Your viewers can use !roam to start playing! If you want me to leave, type !roamleave in this channel.`);
         } else {
             client.say(username, `Seems like you're taking a cat nap @${username}... I'll be ready when you go live!`);
         }
@@ -136,6 +146,12 @@ async function handleChannelStartup(channelName, isReconnect = false) {
 
 // Check if command should be processed based on channel's live status
 async function shouldProcessCommand(channelName) {
+    // In debug mode, always process commands
+    if (DEBUG) {
+        console.log(`DEBUG mode: Processing command in ${channelName} regardless of live status`);
+        return true;
+    }
+
     // Always process commands in the main channel
     if (channelName.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
         return true;
@@ -144,6 +160,7 @@ async function shouldProcessCommand(channelName) {
     try {
         // Check if the channel is live
         const isLive = await checkChannelLiveStatus(channelName);
+        console.log(`Channel ${channelName} live status check result: ${isLive}`);
         return isLive;
     } catch (error) {
         console.error(`Error checking if should process command for ${channelName}:`, error);

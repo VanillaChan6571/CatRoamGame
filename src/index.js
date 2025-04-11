@@ -146,3 +146,17 @@ process.on('SIGINT', () => {
     client.disconnect();
     process.exit(0);
 });
+
+// Check if essential environment variables are set
+console.log('Environment Check:');
+console.log(`- BOT_USERNAME: ${process.env.BOT_USERNAME ? 'Set' : 'NOT SET'}`);
+console.log(`- BOT_OAUTH_TOKEN: ${process.env.BOT_OAUTH_TOKEN ? 'Set' : 'NOT SET'}`);
+console.log(`- TWITCH_CLIENT_ID: ${process.env.TWITCH_CLIENT_ID ? 'Set' : 'NOT SET'}`);
+console.log(`- CHANNELS: ${process.env.CHANNELS ? 'Set' : 'NOT SET'}`);
+console.log(`- DEBUG: ${process.env.DEBUG}`);
+
+// If critical variables are missing, log a warning
+if (!process.env.TWITCH_CLIENT_ID || !process.env.BOT_OAUTH_TOKEN) {
+    console.warn('WARNING: Missing critical Twitch API credentials. Commands in non-main channels may not work correctly.');
+    console.warn('Please ensure your .env file has TWITCH_CLIENT_ID and BOT_OAUTH_TOKEN set correctly.');
+}
