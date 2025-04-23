@@ -7,8 +7,8 @@ const LUCK_TAG_CHANCE = 0.02; // 2% chance for luck multipliers
 
 // Item definitions by rarity
 const ITEMS = {
-    COMMON: ["Fish", "Mouse", "Rat", "Yarn Ball"],
-    UNCOMMON: ["Shoe", "Bird", "Spider"],
+    COMMON: ["Fish", "Mouse", "Rat", "Yarn Ball, Toy Mouse, Cricket, Butterfly, Moth, Fly, Beetle"],
+    UNCOMMON: ["Shoe", "Bird", "Spider, Small Lizard, "],
     RARE: ["Yarn Ball", "String"],
     ULTRA: ["Can of Beans", "Bigger Fish"],
     LEGEND: ["Fluffy Pillow", "Chicken"],
