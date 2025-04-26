@@ -127,9 +127,22 @@ async function checkChannelLiveStatus(channelName) {
 
         // Check if TWITCH_CLIENT_ID and BOT_OAUTH_TOKEN are properly set
         if (!process.env.TWITCH_CLIENT_ID || !BOT_OAUTH_TOKEN) {
-            console.log(`Missing Twitch credentials - defaulting ${normalizedChannelName} to live status`);
-            await updateChannelLiveStatus(normalizedChannelName, true);
-            return true;
+            console.log(`Missing Twitch credentials - using fallback method for ${normalizedChannelName}`);
+
+            // In debug mode, we'll simulate some channels as live for testing
+            if (process.env.DEBUG === 'true') {
+                // For testing, let's consider some channels as live
+                const mockLiveChannels = ['charlydire', 'vanillachanny', 'morphixgaming']; // Add channels you want to test as "live"
+                const isLive = mockLiveChannels.includes(normalizedChannelName.toLowerCase());
+                console.log(`DEBUG mode (no credentials): Setting ${normalizedChannelName} to ${isLive ? 'live' : 'offline'} status`);
+                await updateChannelLiveStatus(normalizedChannelName, isLive);
+                return isLive;
+            } else {
+                // For non-debug production, default to true
+                console.log(`Production mode: Defaulting ${normalizedChannelName} to live status`);
+                await updateChannelLiveStatus(normalizedChannelName, true);
+                return true;
+            }
         }
 
         // First get the user ID
@@ -141,9 +154,21 @@ async function checkChannelLiveStatus(channelName) {
         });
 
         if (!userResponse.data.data.length) {
-            console.log(`User not found for ${normalizedChannelName} - defaulting to live status`);
-            await updateChannelLiveStatus(normalizedChannelName, true);
-            return true; // Changed to true for development
+            console.log(`User not found for ${normalizedChannelName}`);
+
+            // In debug mode, we can simulate some channels as live for testing
+            if (process.env.DEBUG === 'true') {
+                // For testing, let's consider some channels as live
+                const mockLiveChannels = ['charlydire', 'vanillachanny', 'morphixgaming']; // Add channels you want to test as "live"
+                const isLive = mockLiveChannels.includes(normalizedChannelName.toLowerCase());
+                console.log(`DEBUG mode (user not found): Setting ${normalizedChannelName} to ${isLive ? 'live' : 'offline'} status`);
+                await updateChannelLiveStatus(normalizedChannelName, isLive);
+                return isLive;
+            } else {
+                // For production, default to true to avoid breaking things
+                await updateChannelLiveStatus(normalizedChannelName, true);
+                return true;
+            }
         }
 
         const userId = userResponse.data.data[0].id;
@@ -156,18 +181,35 @@ async function checkChannelLiveStatus(channelName) {
             }
         });
 
-        // Update the database with current status
+        // Get the actual live status from the API
         const isLive = streamResponse.data.data.length > 0;
-        console.log(`Channel ${normalizedChannelName} live status: ${isLive}`);
+        console.log(`Channel ${normalizedChannelName} live status from API: ${isLive}`);
+
+        // In debug mode, log the API result but RESPECT IT instead of overriding
+        if (process.env.DEBUG === 'true') {
+            console.log(`DEBUG mode: Using actual API result for ${normalizedChannelName}: ${isLive}`);
+            await updateChannelLiveStatus(normalizedChannelName, isLive);
+            return isLive;
+        }
+
+        // Update the database with the actual status
         await updateChannelLiveStatus(normalizedChannelName, isLive);
-
-        // For development, consider all channels live
-        // return true; // Uncomment this line to force all channels as "live"
-
         return isLive;
     } catch (error) {
         console.error('Error checking channel live status:', error.message);
-        // For testing, default to true so commands work
+
+        // In debug mode, set specific channels as live for testing
+        if (process.env.DEBUG === 'true') {
+            const normalizedChannelName = channelName.startsWith('#') ? channelName.substring(1) : channelName;
+            const mockLiveChannels = ['charlydire', 'vanillachanny', 'morphixgaming']; // Add channels you want to test as "live"
+            const isLive = mockLiveChannels.includes(normalizedChannelName.toLowerCase());
+
+            console.log(`DEBUG mode (error): Setting ${normalizedChannelName} to ${isLive ? 'live' : 'offline'} status`);
+            await updateChannelLiveStatus(normalizedChannelName, isLive);
+            return isLive;
+        }
+
+        // For production, default to true to avoid breaking things
         await updateChannelLiveStatus(channelName.startsWith('#') ? channelName.substring(1) : channelName, true);
         return true;
     }

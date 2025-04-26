@@ -8,7 +8,7 @@ const { getJoinedChannels } = require('../db/channelQueries');
 
 // Game state
 let queue = [];
-let inGame = new Set();
+let inGame = new Map(); // Changed from Set to Map to store channel info
 let lastMessageTime = 0;
 let processingActive = false; // Flag to prevent manual processing
 
@@ -32,13 +32,15 @@ function processRoam() {
     const batchSize = Math.min(3, queue.length);
     const currentBatch = queue.splice(0, batchSize);
 
-    let message = "";
+    // Create a map to organize messages by channel
+    const channelMessages = new Map();
 
     // Process each user
     const processBatch = async () => {
         for (const user of currentBatch) {
             const userId = user.id;
             const username = user.name;
+            const channel = user.channel; // Get the channel where the command originated
 
             try {
                 // Get user's active effects
@@ -81,27 +83,37 @@ function processRoam() {
                             userPart += ` cat`;
                         }
 
-                        message += `${userPart} returned! it found ${item} rarity of ${tag}`;
+                        // Assemble the message for this user
+                        let userMessage = `${userPart} returned! it found ${item} rarity of ${tag}`;
 
                         if (luckTag) {
-                            message += ` x ${luckTag}`;
+                            userMessage += ` x ${luckTag}`;
                         }
 
                         // Add info about coin booster if active
                         if (coinMultiplier > 1) {
                             const baseValueStr = baseValue.toString();
-                            message += ` worth ${finalValue} Vanilla Coins! (Base: ${baseValueStr}) `;
+                            userMessage += ` worth ${finalValue} Vanilla Coins! (Base: ${baseValueStr}) `;
                         } else {
-                            message += ` worth over ${finalValue} Vanilla Coins! `;
+                            userMessage += ` worth over ${finalValue} Vanilla Coins! `;
                         }
 
-                        // Remove user from in-game set
+                        // Add this message to the appropriate channel
+                        if (!channelMessages.has(channel)) {
+                            channelMessages.set(channel, userMessage);
+                        } else {
+                            channelMessages.set(channel, channelMessages.get(channel) + " " + userMessage);
+                        }
+
+                        // Remove user from in-game map
                         inGame.delete(userId);
 
-                        // If this is the last user in batch, send the message
+                        // If this is the last user in batch, send the messages
                         if (inGame.size === 0) {
-                            // Send the message to all connected channels
-                            sendToAllChannels(message);
+                            // Send each message to its appropriate channel
+                            for (const [ch, msg] of channelMessages.entries()) {
+                                client.say(ch, msg);
+                            }
 
                             // Update last message time
                             lastMessageTime = currentTime;
@@ -115,9 +127,15 @@ function processRoam() {
                 console.error(`Error processing roam for user ${username}:`, err);
 
                 // Add a basic message in case of error
-                message += `@${username}'s cat returned! it found something... `;
+                let errorMessage = `@${username}'s cat returned! it found something... `;
 
-                // Remove user from in-game set
+                if (!channelMessages.has(channel)) {
+                    channelMessages.set(channel, errorMessage);
+                } else {
+                    channelMessages.set(channel, channelMessages.get(channel) + " " + errorMessage);
+                }
+
+                // Remove user from in-game map
                 inGame.delete(userId);
             }
         }
@@ -127,9 +145,11 @@ function processRoam() {
     processBatch().catch(err => {
         console.error('Error in batch processing:', err);
 
-        // Send whatever message we have so far
-        if (message) {
-            sendToAllChannels(message);
+        // Send whatever messages we have so far
+        if (channelMessages.size > 0) {
+            for (const [ch, msg] of channelMessages.entries()) {
+                client.say(ch, msg);
+            }
         }
 
         // Clean up any remaining users
@@ -143,32 +163,15 @@ function processRoam() {
     });
 }
 
-// Send message to all connected channels
-async function sendToAllChannels(message) {
-    try {
-        // Get all connected channels from database
-        const channels = await getJoinedChannels();
-
-        // Send message to each channel
-        for (const channel of channels) {
-            client.say(channel.channel_name, message);
-        }
-    } catch (error) {
-        console.error('Error sending to all channels:', error);
-        // Fallback to main channel if there's an error
-        client.say(MAIN_CHANNEL, message);
-    }
-}
-
 // Start the game for a user
-function startRoam(userId, username) {
+function startRoam(userId, username, channel) {
     if (inGame.has(userId)) {
         return false; // Already in game
     }
 
-    // Add user to queue
-    queue.push({id: userId, name: username});
-    inGame.add(userId);
+    // Add user to queue with channel information
+    queue.push({id: userId, name: username, channel: channel});
+    inGame.set(userId, channel); // Store the channel with the user ID
     return true;
 }
 
@@ -181,7 +184,7 @@ function isInGame(userId) {
 function getGameState() {
     return {
         queueSize: queue.length,
-        activePlayers: Array.from(inGame),
+        activePlayers: Array.from(inGame.keys()),
         lastMessageTime,
         cooldownRemaining: Math.max(0, COOLDOWN_TIME - (Date.now() - lastMessageTime))
     };

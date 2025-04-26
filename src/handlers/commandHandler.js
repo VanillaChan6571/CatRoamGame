@@ -7,10 +7,16 @@ const { DEBUG, MAIN_CHANNEL } = require('../config/config');
 
 // Handle user commands
 async function handleCommand(userId, username, command, tags, channel) {
+    // First, normalize the channel names for proper comparison
+    const normalizedChannel = channel.toLowerCase().replace(/^#/, '');
+    const normalizedMainChannel = MAIN_CHANNEL.toLowerCase().replace(/^#/, '');
+
     if (DEBUG) {
         console.log(`Handling command: ${command} from user: ${username} (${userId}) in channel: ${channel}`);
         console.log('Main channel is:', MAIN_CHANNEL);
-        console.log('Is this the main channel?', channel.toLowerCase() === MAIN_CHANNEL.toLowerCase());
+        console.log('Normalized channel:', normalizedChannel);
+        console.log('Normalized main channel:', normalizedMainChannel);
+        console.log('Is this the main channel?', normalizedChannel === normalizedMainChannel);
 
         if (command.toLowerCase().startsWith('!roamjoin')) {
             console.log('!roamjoin command detected! Tags:', JSON.stringify(tags));
@@ -26,7 +32,7 @@ async function handleCommand(userId, username, command, tags, channel) {
         console.log(`Processing !roamjoin from ${username} in channel: ${channel}`);
 
         // Only allow from main channel (unless in DEBUG mode)
-        if (DEBUG || channel.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
+        if (DEBUG || normalizedChannel === normalizedMainChannel) {
             await handleJoinCommand(userId, username, tags);
         } else {
             client.say(channel, `@${username}, the !roamjoin command can only be used in the main channel: ${MAIN_CHANNEL}`);
@@ -41,12 +47,13 @@ async function handleCommand(userId, username, command, tags, channel) {
     }
 
     // Check if the channel is live (if not the main channel)
-    if (channel.toLowerCase() !== MAIN_CHANNEL.toLowerCase()) {
+    if (normalizedChannel !== normalizedMainChannel) {
         const shouldProcess = await shouldProcessCommand(channel);
         if (!shouldProcess) {
             // Only respond occasionally to avoid spamming
             if (Math.random() < 0.25) { // 25% chance to respond
-                return `Seems like ${channel} is taking a cat nap... please wait for them to wake up!`;
+                // Send the message instead of just returning it
+                client.say(channel, `Seems like ${normalizedChannel} is taking a cat nap... please wait for them to wake up!`);
             }
             return;
         }

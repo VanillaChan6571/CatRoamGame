@@ -222,6 +222,125 @@ function populateShopItems() {
     console.log('Shop items populated successfully');
 }
 
+// Initialize bot session tracking
+function initSessionTracking() {
+    db.serialize(() => {
+        // Create bot_sessions table to track bot startup and reconnects
+        db.run(`CREATE TABLE IF NOT EXISTS bot_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time INTEGER NOT NULL,
+            is_restart BOOLEAN DEFAULT 0,
+            session_info TEXT
+        )`);
+
+        // Create channel_connections table to track active connections
+        db.run(`CREATE TABLE IF NOT EXISTS channel_connections (
+            channel_name TEXT PRIMARY KEY,
+            first_connected INTEGER NOT NULL,
+            last_connected INTEGER NOT NULL,
+            connection_count INTEGER DEFAULT 1
+        )`);
+
+        console.log('Session tracking initialized');
+    });
+}
+
+// Record a new bot session
+function recordBotSession(isRestart) {
+    const startTime = Date.now();
+
+    db.run(`INSERT INTO bot_sessions (start_time, is_restart, session_info) 
+        VALUES (?, ?, ?)`,
+        [startTime, isRestart ? 1 : 0, `Bot ${isRestart ? 'restarted' : 'started'} at ${new Date(startTime).toISOString()}`],
+        function(err) {
+            if (err) {
+                console.error('Error recording bot session:', err);
+            } else {
+                console.log(`Bot session recorded: ${isRestart ? 'restart' : 'new session'}`);
+            }
+        }
+    );
+}
+
+// Check if a channel has been connected before
+function checkChannelPreviousConnection(channelName, callback) {
+    // Normalize channel name
+    const normalizedChannelName = channelName.replace(/^#/, '').toLowerCase();
+
+    db.get(`SELECT * FROM channel_connections WHERE channel_name = ?`,
+        [normalizedChannelName],
+        (err, row) => {
+            if (err) {
+                console.error('Error checking channel connection history:', err);
+                callback(false, 0);
+            } else {
+                const hadPriorConnection = !!row;
+                const connectionCount = row ? row.connection_count : 0;
+                callback(hadPriorConnection, connectionCount);
+            }
+        }
+    );
+}
+
+// Update channel connection record
+function updateChannelConnection(channelName) {
+    // Normalize channel name
+    const normalizedChannelName = channelName.replace(/^#/, '').toLowerCase();
+    const currentTime = Date.now();
+
+    db.get(`SELECT * FROM channel_connections WHERE channel_name = ?`,
+        [normalizedChannelName],
+        (err, row) => {
+            if (err) {
+                console.error('Error checking channel connection:', err);
+                return;
+            }
+
+            if (row) {
+                // Update existing connection
+                db.run(`UPDATE channel_connections 
+                    SET last_connected = ?, connection_count = connection_count + 1 
+                    WHERE channel_name = ?`,
+                    [currentTime, normalizedChannelName],
+                    function(err) {
+                        if (err) {
+                            console.error('Error updating channel connection:', err);
+                        } else {
+                            console.log(`Updated connection for ${normalizedChannelName}`);
+                        }
+                    }
+                );
+            } else {
+                // New connection
+                db.run(`INSERT INTO channel_connections 
+                    (channel_name, first_connected, last_connected) 
+                    VALUES (?, ?, ?)`,
+                    [normalizedChannelName, currentTime, currentTime],
+                    function(err) {
+                        if (err) {
+                            console.error('Error recording channel connection:', err);
+                        } else {
+                            console.log(`Recorded first connection for ${normalizedChannelName}`);
+                        }
+                    }
+                );
+            }
+        }
+    );
+}
+
+// Check if bot has been running before
+function checkPreviousBotSession(callback) {
+    db.get(`SELECT COUNT(*) as sessionCount FROM bot_sessions`, [], (err, row) => {
+        if (err) {
+            console.error('Error checking previous bot sessions:', err);
+            callback(false);
+        } else {
+            callback(row.sessionCount > 0);
+        }
+    });
+}
+
 // Initialize database on startup
 initDatabase();
 
@@ -233,5 +352,10 @@ process.on('exit', () => {
 
 module.exports = {
     db,
-    initDatabase
+    initDatabase,
+    initSessionTracking,
+    recordBotSession,
+    checkChannelPreviousConnection,
+    updateChannelConnection,
+    checkPreviousBotSession
 };

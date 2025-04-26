@@ -28,8 +28,8 @@ function handleRoamCommand(userId, username, channel) {
             setLastMessageTime(currentTime);
         }
     } else {
-        // Add user to queue
-        startRoam(userId, username);
+        // Add user to queue - pass the channel parameter
+        startRoam(userId, username, channel);
 
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
             getCatName(userId, (catName) => {

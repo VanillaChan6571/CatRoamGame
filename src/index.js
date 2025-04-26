@@ -5,9 +5,20 @@ const { setupCommandListener } = require('./handlers/commandHandler');
 const { startGameLoop } = require('./handlers/gameLogic');
 const { getJoinedChannels, initializeMainChannel } = require('./db/channelQueries');
 const { handleChannelStartup } = require('./handlers/channelCommands');
+const {
+    initDatabase,
+    initSessionTracking,
+    recordBotSession,
+    checkPreviousBotSession
+} = require('./db/database');
 
-// Initialize the database (automatically happens when imported)
-require('./db/database');
+// Initialize the database
+initDatabase();
+// Initialize session tracking
+initSessionTracking();
+
+// Global flag to track if this is a restart
+let isRestart = false;
 
 // Log configuration (without revealing sensitive information)
 console.log('Bot Configuration:');
@@ -50,9 +61,27 @@ async function initializeChannels() {
     }
 }
 
+// Check if this is a restart
+async function checkIfRestart() {
+    return new Promise((resolve) => {
+        checkPreviousBotSession((hadPrevSession) => {
+            isRestart = hadPrevSession;
+            console.log(`Bot startup type: ${isRestart ? 'RESTART' : 'FIRST START'}`);
+            resolve(isRestart);
+        });
+    });
+}
+
 // Connect to Twitch with enhanced error handling
-client.connect()
-    .then(async () => {
+async function startBot() {
+    // First check if this is a restart
+    await checkIfRestart();
+
+    // Record this session
+    recordBotSession(isRestart);
+
+    try {
+        await client.connect();
         console.log('Connected to Twitch successfully!');
 
         // Add event listeners for important events
@@ -85,17 +114,20 @@ client.connect()
         setTimeout(async () => {
             try {
                 for (const channel of channels) {
-                    await handleChannelStartup(channel.channel_name, false);
+                    await handleChannelStartup(channel.channel_name, isRestart);
                 }
             } catch (err) {
                 console.error('Error sending startup messages:', err);
             }
         }, 5000);
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('Failed to connect to Twitch:', err);
         process.exit(1);
-    });
+    }
+}
+
+// Start the bot
+startBot();
 
 // For debugging purposes only
 if (process.env.DEBUG === 'true') {

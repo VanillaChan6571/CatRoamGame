@@ -4,6 +4,7 @@ const { COOLDOWN_TIME } = require('../config/constants');
 const { lastMessageTime, setLastMessageTime } = require('./gameLogic');
 const { addChannel, removeChannel, isChannelJoined, checkChannelLiveStatus, checkModStatus } = require('../db/channelQueries');
 const { isModerator } = require('./modCommands');
+const { updateChannelConnection } = require('../db/database');
 
 // Handle join request command
 async function handleJoinCommand(userId, username, tags) {
@@ -110,11 +111,22 @@ async function handleLeaveCommand(userId, username, channelName) {
 // Handle bot startup messaging for a channel
 async function handleChannelStartup(channelName, isReconnect = false) {
     try {
+        // Normalize channel name
+        const normalizedChannelName = channelName.replace(/^#/, '');
+        const normalizedMainChannel = MAIN_CHANNEL.replace(/^#/, '');
+
+        // Check if this is the main channel
+        const isMainChannel = normalizedChannelName.toLowerCase() === normalizedMainChannel.toLowerCase();
+
+        // Track this connection in the database
+        updateChannelConnection(channelName);
+
         // Check if the channel is live
         const isLive = await checkChannelLiveStatus(channelName);
+        console.log(`Channel startup check for ${normalizedChannelName}: isLive=${isLive}, isMainChannel=${isMainChannel}, isReconnect=${isReconnect}`);
 
         // Different messages based on live status and whether this is a reconnect
-        if (channelName.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
+        if (isMainChannel) {
             // Main channel message
             if (isReconnect) {
                 client.say(channelName, "Bot reconnected! Looking out for commands now!");
@@ -125,15 +137,15 @@ async function handleChannelStartup(channelName, isReconnect = false) {
             // Joint channel message
             if (isLive) {
                 if (isReconnect) {
-                    client.say(channelName, `Sorry Master ${channelName}, I notice you're live, the goddess had an important restart! I am here and ready to accept commands again!`);
+                    client.say(channelName, `Sorry Master ${normalizedChannelName}, I notice you're live, the goddess had an important restart! I am here and ready to accept commands again!`);
                 } else {
-                    client.say(channelName, `Master ${channelName} is awake! I will now prepare to establish commands now! (if you wish for me to leave, !roamleave or visit https://twitch.tv/${MAIN_CHANNEL})`);
+                    client.say(channelName, `Master ${normalizedChannelName} is awake! I will now prepare to establish commands now! (if you wish for me to leave, !roamleave)`);
                 }
             } else {
                 if (isReconnect) {
                     client.say(channelName, "My systems were updated. Master is offline while system was updated, continue sleeping...");
                 } else {
-                    client.say(channelName, `Seems like Master ${channelName} is taking a cat nap... please wait for them to wake up!`);
+                    client.say(channelName, `Seems like Master ${normalizedChannelName} is taking a cat nap... please wait for them to wake up!`);
                 }
             }
         }
@@ -146,14 +158,12 @@ async function handleChannelStartup(channelName, isReconnect = false) {
 
 // Check if command should be processed based on channel's live status
 async function shouldProcessCommand(channelName) {
-    // In debug mode, always process commands
-    if (DEBUG) {
-        console.log(`DEBUG mode: Processing command in ${channelName} regardless of live status`);
-        return true;
-    }
+    // Normalize channel names for comparison
+    const normalizedChannel = channelName.toLowerCase().replace(/^#/, '');
+    const normalizedMainChannel = MAIN_CHANNEL.toLowerCase().replace(/^#/, '');
 
     // Always process commands in the main channel
-    if (channelName.toLowerCase() === MAIN_CHANNEL.toLowerCase()) {
+    if (normalizedChannel === normalizedMainChannel) {
         return true;
     }
 
@@ -161,6 +171,12 @@ async function shouldProcessCommand(channelName) {
         // Check if the channel is live
         const isLive = await checkChannelLiveStatus(channelName);
         console.log(`Channel ${channelName} live status check result: ${isLive}`);
+
+        // In debug mode, we still log this information but don't bypass the live check
+        if (DEBUG) {
+            console.log(`DEBUG mode: Channel ${channelName} live status: ${isLive}`);
+        }
+
         return isLive;
     } catch (error) {
         console.error(`Error checking if should process command for ${channelName}:`, error);
