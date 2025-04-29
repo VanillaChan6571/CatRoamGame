@@ -14,6 +14,7 @@ function handleRoamCommand(userId, username, channel) {
         // User is already in queue
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
             getCatName(userId, (catName) => {
+                console.log(`Cat name for ${username} (${userId}): ${catName || 'not set'}`);
                 let message = `Whoa! @${username}`;
                 if (catName && catName.length > 0) {
                     message += `'s "${catName}"`;
@@ -33,6 +34,7 @@ function handleRoamCommand(userId, username, channel) {
 
         if (currentTime - lastMessageTime >= COOLDOWN_TIME) {
             getCatName(userId, (catName) => {
+                console.log(`Cat name for ${username} (${userId}): ${catName || 'not set'}`);
                 let message = `@${username}'s`;
                 if (catName && catName.length > 0) {
                     message += ` "${catName}"`;

@@ -109,6 +109,7 @@ function initShopDatabase() {
         db.run(`CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id ON user_inventory(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_active_effects_user_id ON active_effects(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_active_effects_expires_at ON active_effects(expires_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_cat_names_user_id ON cat_names(user_id)`);
 
         // Populate shop items if table is empty
         db.get(`SELECT COUNT(*) as count FROM shop_items`, [], (err, row) => {

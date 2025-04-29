@@ -98,75 +98,112 @@ function buyShopItem(userId, itemId, callback) {
                 return;
             }
 
-            // Special handling for cat namer (replace existing)
-            if (item.name === 'cat_namer') {
-                db.run(`INSERT OR REPLACE INTO cat_names (user_id, cat_name) VALUES (?, ?)`,
-                    [userId, ''], (err) => {
-                        if (err) {
-                            console.error('Error adding cat name placeholder:', err);
-                            callback(false, 'Database error');
-                            return;
-                        }
-
-                        // Add to inventory
-                        const timestamp = Date.now();
-                        db.run(`INSERT INTO user_inventory (user_id, item_id, quantity, purchased_at)
-                            VALUES (?, ?, ?, ?)`,
-                            [userId, itemId, 1, timestamp], (err) => {
-                                if (err) {
-                                    console.error('Error adding item to inventory:', err);
-                                    callback(false, 'Database error');
-                                } else {
-                                    callback(true, `Successfully purchased ${item.display_name}`);
-                                }
-                            }
-                        );
-                    }
-                );
-                return;
-            }
-
-            // For other items, check if already in inventory and increment quantity
-            db.get(`SELECT id, quantity FROM user_inventory 
-                WHERE user_id = ? AND item_id = ?`,
-                [userId, itemId], (err, existingItem) => {
-                    if (err) {
-                        console.error('Error checking inventory:', err);
-                        callback(false, 'Database error');
-                        return;
-                    }
-
-                    const timestamp = Date.now();
-
-                    if (existingItem) {
-                        // Update quantity
-                        db.run(`UPDATE user_inventory SET quantity = quantity + 1, purchased_at = ?
-                            WHERE id = ?`,
-                            [timestamp, existingItem.id], (err) => {
-                                if (err) {
-                                    console.error('Error updating inventory:', err);
-                                    callback(false, 'Database error');
-                                } else {
-                                    callback(true, `Successfully purchased ${item.display_name}`);
-                                }
-                            }
-                        );
-                    } else {
-                        // Add new item
-                        db.run(`INSERT INTO user_inventory (user_id, item_id, quantity, purchased_at)
-                            VALUES (?, ?, ?, ?)`,
-                            [userId, itemId, 1, timestamp], (err) => {
-                                if (err) {
-                                    console.error('Error adding item to inventory:', err);
-                                    callback(false, 'Database error');
-                                } else {
-                                    callback(true, `Successfully purchased ${item.display_name}`);
-                                }
-                            }
-                        );
-                    }
+            // Get user's current username for the catch record
+            db.get(`SELECT current_username FROM players WHERE user_id = ?`, [userId], (err, player) => {
+                if (err) {
+                    console.error('Error fetching player username:', err);
+                    callback(false, 'Database error');
+                    return;
                 }
-            );
+
+                const username = player ? player.current_username : 'Unknown';
+                const timestamp = Date.now();
+
+                // Begin transaction to ensure everything is atomic
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION');
+
+                    // Add a negative catch to represent the purchase (coin deduction)
+                    // Now providing the username instead of null
+                    db.run(`INSERT INTO catches (user_id, username, item, tag, luck_tag, value, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [userId, username, `Purchased ${item.display_name}`, 'SHOP', null, -item.price, timestamp],
+                        (err) => {
+                            if (err) {
+                                console.error('Error deducting coins:', err);
+                                db.run('ROLLBACK');
+                                callback(false, 'Error processing payment');
+                                return;
+                            }
+
+                            // Special handling for cat namer (replace existing)
+                            if (item.name === 'cat_namer') {
+                                db.run(`INSERT OR REPLACE INTO cat_names (user_id, cat_name) VALUES (?, ?)`,
+                                    [userId, ''], (err) => {
+                                        if (err) {
+                                            console.error('Error adding cat name placeholder:', err);
+                                            db.run('ROLLBACK');
+                                            callback(false, 'Database error');
+                                            return;
+                                        }
+
+                                        // Add to inventory
+                                        db.run(`INSERT INTO user_inventory (user_id, item_id, quantity, purchased_at)
+                                            VALUES (?, ?, ?, ?)`,
+                                            [userId, itemId, 1, timestamp], (err) => {
+                                                if (err) {
+                                                    console.error('Error adding item to inventory:', err);
+                                                    db.run('ROLLBACK');
+                                                    callback(false, 'Database error');
+                                                } else {
+                                                    db.run('COMMIT');
+                                                    callback(true, `Successfully purchased ${item.display_name}`);
+                                                }
+                                            }
+                                        );
+                                    }
+                                );
+                                return;
+                            }
+
+                            // For other items, check if already in inventory and increment quantity
+                            db.get(`SELECT id, quantity FROM user_inventory 
+                                WHERE user_id = ? AND item_id = ?`,
+                                [userId, itemId], (err, existingItem) => {
+                                    if (err) {
+                                        console.error('Error checking inventory:', err);
+                                        db.run('ROLLBACK');
+                                        callback(false, 'Database error');
+                                        return;
+                                    }
+
+                                    if (existingItem) {
+                                        // Update quantity
+                                        db.run(`UPDATE user_inventory SET quantity = quantity + 1, purchased_at = ?
+                                            WHERE id = ?`,
+                                            [timestamp, existingItem.id], (err) => {
+                                                if (err) {
+                                                    console.error('Error updating inventory:', err);
+                                                    db.run('ROLLBACK');
+                                                    callback(false, 'Database error');
+                                                } else {
+                                                    db.run('COMMIT');
+                                                    callback(true, `Successfully purchased ${item.display_name}`);
+                                                }
+                                            }
+                                        );
+                                    } else {
+                                        // Add new item
+                                        db.run(`INSERT INTO user_inventory (user_id, item_id, quantity, purchased_at)
+                                            VALUES (?, ?, ?, ?)`,
+                                            [userId, itemId, 1, timestamp], (err) => {
+                                                if (err) {
+                                                    console.error('Error adding item to inventory:', err);
+                                                    db.run('ROLLBACK');
+                                                    callback(false, 'Database error');
+                                                } else {
+                                                    db.run('COMMIT');
+                                                    callback(true, `Successfully purchased ${item.display_name}`);
+                                                }
+                                            }
+                                        );
+                                    }
+                                }
+                            );
+                        }
+                    );
+                });
+            });
         });
     });
 }
@@ -206,17 +243,42 @@ function applyItemEffect(userId, command, param, isInRoam, callback) {
                             return;
                         }
 
-                        // Update cat name
-                        db.run(`UPDATE cat_names SET cat_name = ? WHERE user_id = ?`,
-                            [param, userId], (err) => {
-                                if (err) {
-                                    console.error('Error updating cat name:', err);
-                                    callback(false, 'Database error');
-                                } else {
-                                    callback(true, `Your cat is now named "${param}"`);
-                                }
+                        // First check if the user already has a cat name entry
+                        db.get(`SELECT cat_name FROM cat_names WHERE user_id = ?`, [userId], (err, catNameRow) => {
+                            if (err) {
+                                console.error('Error checking existing cat name:', err);
+                                callback(false, 'Database error');
+                                return;
                             }
-                        );
+
+                            // If no entry exists, create one - this handles potential missing entries
+                            if (!catNameRow) {
+                                db.run(`INSERT INTO cat_names (user_id, cat_name) VALUES (?, ?)`,
+                                    [userId, param], (err) => {
+                                        if (err) {
+                                            console.error('Error creating new cat name:', err);
+                                            callback(false, 'Database error');
+                                        } else {
+                                            console.log(`Created new cat name "${param}" for user ${userId}`);
+                                            callback(true, `Your cat is now named "${param}"`);
+                                        }
+                                    }
+                                );
+                            } else {
+                                // Update existing cat name
+                                db.run(`UPDATE cat_names SET cat_name = ? WHERE user_id = ?`,
+                                    [param, userId], (err) => {
+                                        if (err) {
+                                            console.error('Error updating cat name:', err);
+                                            callback(false, 'Database error');
+                                        } else {
+                                            console.log(`Updated cat name to "${param}" for user ${userId}`);
+                                            callback(true, `Your cat is now named "${param}"`);
+                                        }
+                                    }
+                                );
+                            }
+                        });
                         break;
 
                     case 'catnip_1x':
@@ -341,6 +403,8 @@ function getCatName(userId, callback) {
                 console.error('Error fetching cat name:', err);
                 callback(null);
             } else {
+                // Add debug logging
+                console.log(`Retrieved cat name for ${userId}: ${row ? row.cat_name : 'null'}`);
                 callback(row ? row.cat_name : null);
             }
         }
